@@ -96,17 +96,14 @@ class IntercomNotifyConsumer:
         self._headers["Authorization"] = f"Bearer {access or ''}"
 
     async def _connect_and_run(self) -> None:
-        self._notify_id_token = await self._api.get_notify_id_token()
-        _LOGGER.debug("Negotiated connectionToken: %s", self._notify_id_token)
-        if not self._notify_id_token:
-            raise RuntimeError("Negotiation failed: empty connectionToken")
-        ws_url = WS_URL + self._notify_id_token
+        # Прямое подключение (как в Android: shouldSkipNegotiate(true)).
+        # Negotiate больше не работает — ?id=<token> возвращает 404.
+        ws_url = WS_URL
         self._headers = dict(self._api.signalr_headers())
         self._headers["Authorization"] = f"Bearer {self._api.access_token or ''}"
-        # receive_timeout = serverTimeout клиента Microsoft SignalR: если за 30с не
-        # пришло ни одного сообщения (сервер шлёт свои ping ~каждые 15с), считаем
-        # соединение мёртвым — receive() бросит TimeoutError, цикл прервётся и
-        # произойдёт переподключение. WS control-ping'и не используем, как и клиент.
+        # receive_timeout = serverTimeout (300с): если за это время от сервера
+        # не пришло ни одного сообщения (включая ping), соединение считается
+        # мёртвым и переподключается.
         ping_task: Optional[asyncio.Task] = None
         try:
             async with self._session.ws_connect(
@@ -186,10 +183,10 @@ class IntercomNotifyConsumer:
         if t == 1:
             await self._handle_invocation(data, ws)
         elif t == 6:
-            # Серверный ping. Клиент Microsoft SignalR его НЕ отправляет обратно —
-            # он лишь сбрасывает serverTimeout и шлёт собственные ping по таймеру
-            # (см. _keepalive). Поэтому просто игнорируем, без эха.
-            _LOGGER.debug("Server ping")
+            # Серверный ping. Отправляем обратно — иначе сервер может разорвать
+            # соединение по таймауту.
+            await ws.send_str(payload + WS_MESSAGE_END)
+            _LOGGER.debug("Server ping (echoed)")
         elif t == 3:
             _LOGGER.debug("Completion frame: %s", data)
         else:

@@ -95,7 +95,19 @@ def _generate_unique_android_guid() -> str:
 
 
 def _generate_device_token() -> str:
-    return _generate_unique_android_guid()
+    """FCM-формат device token: {id}:APA91b{...}.
+
+    Сервер Domonap маршрутизирует звонки (DomofonCalling) по deviceToken
+    в формате FCM. Android GUID не работает — звонки не приходят.
+    """
+    return f"{token_urlsafe(22)}:APA91b{token_urlsafe(134)}"
+
+
+def is_fcm_like_token(value: Optional[str]) -> bool:
+    """True, если строка похожа на FCM device token ({id}:APA91b{...})."""
+    if not isinstance(value, str):
+        return False
+    return ":APA91b" in value and len(value) > 50
 
 
 def is_android_guid(value: Optional[str]) -> bool:

@@ -44,15 +44,21 @@ SERVICE_OPEN_RELAY_BY_LAST_CALL_DOOR_ID_SCHEMA = vol.Schema(
 
 
 def _select_entry_id(hass: HomeAssistant, requested_entry_id: str | None) -> str | None:
+    from .const import WEBRTC_PROXY, MEDIA_PROXY
     domain_data = hass.data.get(DOMAIN, {})
     if not domain_data:
         return None
 
+    non_entry_keys = {WEBRTC_PROXY, MEDIA_PROXY}
+
     if requested_entry_id:
         return requested_entry_id if requested_entry_id in domain_data else None
 
-    # Fallback: first configured entry
-    return next(iter(domain_data.keys()), None)
+    # Fallback: first configured entry (skip WEBRTC_PROXY, MEDIA_PROXY)
+    for key in domain_data:
+        if key not in non_entry_keys:
+            return key
+    return None
 
 
 def _find_last_call_sensor_entity_id(hass: HomeAssistant, entry_id: str | None) -> str | None:
